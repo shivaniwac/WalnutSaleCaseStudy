@@ -1,0 +1,233 @@
+-- Create database
+CREATE DATABASE IF NOT EXISTS walmartSales;
+
+-- Create table
+CREATE TABLE IF NOT EXISTS sales(
+	invoice_id VARCHAR(30) NOT NULL PRIMARY KEY,
+    branch VARCHAR(5) NOT NULL,
+    city VARCHAR(30) NOT NULL,
+    customer_type VARCHAR(30) NOT NULL,
+    gender VARCHAR(30) NOT NULL,
+    product_line VARCHAR(100) NOT NULL,
+    unit_price DECIMAL(10,2) NOT NULL,
+    quantity INT NOT NULL,
+    tax_pct FLOAT(6,4) NOT NULL,
+    total DECIMAL(12, 4) NOT NULL,
+    date DATETIME NOT NULL,
+    time TIME NOT NULL,
+    payment VARCHAR(15) NOT NULL,
+    cogs DECIMAL(10,2) NOT NULL,
+    gross_margin_pct FLOAT(11,9),
+    gross_income DECIMAL(12, 4),
+    rating FLOAT(2, 1)
+);
+
+SELECT * FROM walmartproject.`salesdata.csv`;
+use walmartproject;
+-- SELECT * FROM walmartproject.`walmartsalesdata.csv`;
+-- DATA WRANGLING
+-- ----------------------------------FEATURE ENGINEERING---------------------------------------- 
+-- ------------------------------------TIME_OF_dAY--------------------------------------------- 
+
+SELECT 
+      Time,
+      (CASE
+        WHEN Time BETWEEN '00:00:00' AND '12:00:00' THEN 'MORNING'
+        WHEN Time BETWEEN '12:00:01' AND '16:00:00' THEN 'AFTERNOON'
+        ELSE 'EVENING'
+      END
+      ) AS TIME_OF_DAY
+FROM `walmartproject`.`salesdata.csv`;
+ALTER TABLE `walmartproject`.`salesdata.csv` ADD COLUMN Time_of_day varchar(20);
+
+update  `walmartproject`.`salesdata.csv` 
+set time_of_day = (CASE
+        WHEN Time BETWEEN '00:00:00' AND '12:00:00' THEN 'MORNING'
+        WHEN Time BETWEEN '12:00:01' AND '16:00:00' THEN 'AFTERNOON'
+        ELSE 'EVENING'
+      END
+      );
+-- ---------------------------------------------------------------------------------------------------------------------------
+-- ------------------- ----- -----------day name-- ------------------------------------------
+select date, dayname(date)
+from `walmartproject`.`salesdata.csv`;
+ALTER TABLE `walmartproject`.`salesdata.csv` ADD COLUMN day_name varchar(20);
+update  `walmartproject`.`salesdata.csv` 
+set day_name = dayname(date);
+-- ------------------------------------month_name --------------------------------------------------
+select date, monthname(date)
+from `walmartproject`.`salesdata.csv`; 
+ALTER TABLE `walmartproject`.`salesdata.csv` ADD COLUMN month_name varchar(20);
+update  `walmartproject`.`salesdata.csv` 
+set month_name = monthname(date);	
+-- --------------------------------------------------------------------------------------------------
+-- --------------------------------------GENERIC----------------------------------------------------
+-- How many unique cities does the data have? 
+SELECT distinct City FROM walmartproject.`salesdata.csv`; 
+ 
+-- In which city is each branch?
+SELECT distinct CITY, BRANCH
+FROM walmartproject.`salesdata.csv`
+ORDER BY BRANCH ASC;
+-- -------------------------------------Product---------------------------------------------
+-- How many unique product lines does the data have?  
+select distinct Product_line
+from walmartproject.`salesdata.csv`;
+-- What is the most common payment method?
+SELECT payment, COUNT(*) AS most_common_pm
+FROM walmartproject.`salesdata.csv`
+GROUP BY payment
+ORDER BY most_common_pm DESC
+LIMIT 3;
+-- What is the most selling product line?
+SELECT product_line, COUNT(*) AS most_common_pl
+FROM walmartproject.`salesdata.csv`
+GROUP BY product_line
+ORDER BY most_common_pl DESC
+LIMIT 6;
+-- What is the total revenue by month?
+select month_name as month, sum(total) as total_revenue
+FROM walmartproject.`salesdata.csv`
+group by month_name
+order by total_revenue desc;
+-- What month had the largest COGS?
+select max(cogs) as Largest_cogs
+FROM walmartproject.`salesdata.csv`;
+-- What product line had the largest revenue?
+select product_line as pl, max(total) as largest_revenue
+from walmartproject.`salesdata.csv`
+group by pl
+order by largest_revenue desc
+limit 3;
+-- What is the city with the largest revenue?
+select city, max(total) as clr
+from walmartproject.`salesdata.csv`
+group by city
+order by clr desc
+limit 1;
+-- What product line had the largest VAT?
+select product_line, avg(tax_vat) as vat
+from walmartproject.`salesdata.csv`
+group by Product_line
+order by vat desc;
+
+-- Fetch each product line and add a column to those product line showing "Good", "Bad". Good if its greater than average sales
+-- Calculate the average gross income
+select avg(gross_income) as avg_gi
+from walmartproject.`salesdata.csv`;
+-- Select each product line with gross income categorization
+SELECT 
+      distinct Product_line,
+      (CASE
+        WHEN gross_income > '15.35708995' then 'GOOD'
+        ELSE 'BAD'
+      END
+      ) AS Gross_income_GOOD_Bad
+FROM `walmartproject`.`salesdata.csv`;
+-- Alter the table to add a new column
+ALTER TABLE `walmartproject`.`salesdata.csv` 
+ADD COLUMN Gross_income_GOOD_Bad varchar(5);
+-- Update the table with the new categorization
+update	`walmartproject`.`salesdata.csv`
+set Gross_income_GOOD_Bad =(CASE
+        WHEN gross_income > '15.35708995' then 'GOOD'
+        ELSE 'BAD'
+      END
+      );
+
+-- Which branch sold more products than average product sold?
+SELECT branch, sum(quantity) as qty
+FROM walmartproject.`salesdata.csv`
+group by branch
+having sum(quantity) > (select avg(quantity) from sales);
+
+-- What is the most common product line by gender?
+SELECT distinct Product_line, gender, count(gender) as total_Cnt
+FROM walmartproject.`salesdata.csv`
+group by Product_line, gender
+order by total_cnt desc;
+
+-- What is the average rating of each product line? 
+select product_line, round(avg(rating),2) as rating
+FROM walmartproject.`salesdata.csv`
+group by product_line
+order by rating desc;
+-- ---------------------------------------------------------------------------------------------
+-- -------------------------------------------Sales---------------------------------------------------
+-- Number of sales made in each time of the day per weekday
+SELECT 
+    day_name,
+    COUNT(*) AS Sales_Count
+FROM walmartproject.`salesdata.csv`
+GROUP BY 
+    day_name, Time_of_Day
+ORDER BY 
+    FIELD(day_name, 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'),
+    FIELD(Time_of_Day, 'MORNING', 'AFTERNOON', 'EVENING') Desc;
+
+-- Which of the customer types brings the most revenue?
+select distinct customer_type as ct, sum(total) as Customer_type_revenue
+FROM walmartproject.`salesdata.csv`
+group by ct
+order by  Customer_type_revenue desc;
+-- Which city has the largest tax percent/ VAT (Value Added Tax)?
+select distinct city as ct, round(AVG((Tax_vat / (Total - Tax_vat)) * 100)) AS Average_Tax_Percent
+FROM walmartproject.`salesdata.csv`
+group by ct
+order by  Average_Tax_Percent desc;
+-- which cutomer type pays the most vat? 
+select distinct customer_type as ct, round(sum(tax_vat),2) as most_vat
+FROM walmartproject.`salesdata.csv`
+group by ct
+order by  most_vat desc;
+
+-- ------------------------------------------------------------------Customer -------------------------------
+-- How many unique customer types does the data have?
+SELECT COUNT(DISTINCT Customer_type) AS Unique_Customer_Types
+FROM walmartproject.`salesdata.csv`;
+
+-- How many unique payment methods does the data have?
+select count(distinct(payment)) as unique_payment_methods
+FROM walmartproject.`salesdata.csv`;
+
+-- What is the most common customer type?
+select customer_type, count(Customer_type) as common_customer
+FROM walmartproject.`salesdata.csv`
+group by customer_type
+order by common_customer desc;
+-- Which customer type buys the most?
+select customer_type, count(quantity) as quantity
+FROM walmartproject.`salesdata.csv`
+group by customer_type
+order by quantity desc;
+-- What is the gender of most of the customers?
+select gender, count(gender) as common_gender_customer
+FROM walmartproject.`salesdata.csv`
+group by gender
+order by common_gender_customer desc;
+-- What is the gender distribution per branch?
+select gender, branch ,count(*) as f
+FROM walmartproject.`salesdata.csv`
+group by gender, branch
+order by gender, branch asc, f desc;
+-- Which time of the day do customers give most ratings?
+select count(rating) as max_Rating, time_of_day
+FROM walmartproject.`salesdata.csv`
+group by time_of_day
+order by max_rating desc;
+-- Which time of the day do customers give most ratings per branch?
+select count(rating) as max_Rating, time_of_day,branch
+FROM walmartproject.`salesdata.csv`
+group by branch,time_of_day
+order by branch asc,time_of_day asc, max_rating desc;
+-- Which day fo the week has the best avg ratings?
+SELECT DAY_NAME, AVG(Rating) AS Avg_Rating
+FROM walmartproject.`salesdata.csv`
+GROUP BY day_name
+ORDER BY Avg_Rating DESC
+LIMIT 1;
+-- Which day of the week has the best average ratings per branch?
+SELECT distinct(day_name), AVG(Rating) AS Avg_Rating, branch
+FROM walmartproject.`salesdata.csv`
+GROUP BY day_name, branch
+ORDER BY Avg_Rating DESC;
